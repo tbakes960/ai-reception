@@ -1,0 +1,14 @@
+{
+  "faqCache": true,
+  "escalationRouting": true,
+  "voiceInput": true,
+  "bookingIntegration": true,
+  "calendarIntegration": false,
+  "analyticsLogging": true,
+  "humanHandoffUI": false,
+  "outboundCalling": true,
+  "ragKnowledgeBase": true,
+  "whatsappNotifications": false,
+  "emailNotifications": true,
+  "smsNotifications": true
+}
