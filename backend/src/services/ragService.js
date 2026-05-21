@@ -19,21 +19,23 @@ async function embedText(text) {
   return data.data?.[0]?.embedding || null;
 }
 
-async function getContext(query) {
+async function getContext(query, tenantId) {
   if (!query || !process.env.OPENAI_API_KEY) return '';
 
   try {
     const embedding = await embedText(query);
     if (!embedding) return '';
 
-    // pgvector cosine similarity search
+    const params = [`[${embedding.join(',')}]`];
+    const tenantClause = tenantId ? ` AND tenant_id = $${params.push(tenantId)}` : '';
+
     const { rows } = await db.query(
       `SELECT title, content, 1 - (embedding <=> $1::vector) AS similarity
        FROM knowledge_documents
-       WHERE 1 - (embedding <=> $1::vector) > 0.6
+       WHERE 1 - (embedding <=> $1::vector) > 0.6${tenantClause}
        ORDER BY embedding <=> $1::vector
        LIMIT 3`,
-      [`[${embedding.join(',')}]`]
+      params
     );
 
     if (!rows.length) return '';
@@ -44,16 +46,16 @@ async function getContext(query) {
   }
 }
 
-async function upsertDocument({ title, content }) {
+async function upsertDocument({ title, content, tenantId }) {
   const embedding = await embedText(content);
 
   const { rows } = await db.query(
-    `INSERT INTO knowledge_documents (title, content, embedding)
-     VALUES ($1, $2, $3::vector)
-     ON CONFLICT (title) DO UPDATE
+    `INSERT INTO knowledge_documents (title, content, embedding, tenant_id)
+     VALUES ($1, $2, $3::vector, $4)
+     ON CONFLICT (title, tenant_id) DO UPDATE
        SET content = EXCLUDED.content, embedding = EXCLUDED.embedding
      RETURNING *`,
-    [title, content, embedding ? `[${embedding.join(',')}]` : null]
+    [title, content, embedding ? `[${embedding.join(',')}]` : null, tenantId || null]
   );
   return rows[0];
 }

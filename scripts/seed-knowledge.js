@@ -10,7 +10,9 @@ const { Pool } = require('pg');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  ssl: process.env.DATABASE_URL?.includes('railway') || process.env.NODE_ENV === 'production'
+    ? { rejectUnauthorized: false }
+    : false,
 });
 
 async function embedText(text) {
@@ -39,6 +41,17 @@ function chunkMarkdown(content) {
 }
 
 async function main() {
+  const tenantSlug = process.argv[2] || 'oyugis';
+
+  // Resolve tenant UUID — required because knowledge_documents.tenant_id is NOT NULL
+  const tenantRes = await pool.query('SELECT id FROM tenants WHERE slug = $1', [tenantSlug]);
+  if (!tenantRes.rows[0]) {
+    console.error(`Tenant '${tenantSlug}' not found in DB. Run the SaaS migration first.`);
+    process.exit(1);
+  }
+  const tenantId = tenantRes.rows[0].id;
+  console.log(`Seeding for tenant '${tenantSlug}' (${tenantId})\n`);
+
   const faqPath = path.join(__dirname, '../knowledge/hotel-faqs.md');
   if (!fs.existsSync(faqPath)) { console.error('knowledge/hotel-faqs.md not found'); process.exit(1); }
 
@@ -49,11 +62,11 @@ async function main() {
     process.stdout.write(`  ${chunk.title}… `);
     const embedding = await embedText(`${chunk.title}\n${chunk.content}`);
     await pool.query(
-      `INSERT INTO knowledge_documents (title, content, embedding)
-       VALUES ($1, $2, $3::vector)
-       ON CONFLICT (title) DO UPDATE
+      `INSERT INTO knowledge_documents (title, content, embedding, tenant_id)
+       VALUES ($1, $2, $3::vector, $4)
+       ON CONFLICT (title, tenant_id) DO UPDATE
          SET content = EXCLUDED.content, embedding = EXCLUDED.embedding`,
-      [chunk.title, chunk.content, `[${embedding.join(',')}]`]
+      [chunk.title, chunk.content, `[${embedding.join(',')}]`, tenantId]
     );
     console.log('OK');
   }

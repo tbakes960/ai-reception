@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, CalendarDays, MessageSquare, Megaphone, Settings, LogOut, Phone } from 'lucide-react';
+import { LayoutDashboard, Users, CalendarDays, MessageSquare, Megaphone, BookOpen, Settings, LogOut, Phone } from 'lucide-react';
 
 const NAV = [
   { href: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -9,6 +9,7 @@ const NAV = [
   { href: '/bookings', icon: CalendarDays, label: 'Bookings' },
   { href: '/conversations', icon: MessageSquare, label: 'Calls' },
   { href: '/campaigns', icon: Megaphone, label: 'Campaigns' },
+  { href: '/knowledge', icon: BookOpen, label: 'Knowledge Base' },
   { href: '/settings', icon: Settings, label: 'Settings' },
 ];
 
@@ -26,7 +27,7 @@ export default function DashboardLayout({ children }) {
         <div className="p-5 border-b border-slate-100">
           <div className="flex items-center gap-2">
             <Phone className="w-5 h-5 text-sky-600" />
-            <span className="font-bold text-slate-900 text-sm">AI Reception</span>
+            <span className="font-bold text-slate-900 text-sm">Rehema AI</span>
           </div>
         </div>
         <nav className="flex-1 p-3 space-y-0.5">

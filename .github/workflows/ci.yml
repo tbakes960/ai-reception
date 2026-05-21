@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend — lint & audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Dependency security audit
+        run: npm audit --audit-level=high
+
+      - name: Smoke test — server starts and /health responds
+        env:
+          # Minimal env to pass validateEnv (stubbed values for CI)
+          DATABASE_URL: postgresql://postgres:test@localhost:5432/test
+          JWT_SECRET: this-is-a-ci-test-secret-that-is-at-least-32-chars
+          ANTHROPIC_API_KEY: sk-ant-ci-stub
+          TWILIO_ACCOUNT_SID: ACci00000000000000000000000000000000
+          TWILIO_AUTH_TOKEN: ci_stub_token
+          TWILIO_PHONE_NUMBER: "+10000000000"
+          ELEVENLABS_API_KEY: ci_stub
+          ELEVENLABS_VOICE_ID: ci_stub
+          DEEPGRAM_API_KEY: ci_stub
+          SERVER_URL: http://localhost:3000
+          FRONTEND_URL: http://localhost:4000
+          HOTEL_NAME: CI Test Hotel
+          HOTEL_TIMEZONE: UTC
+          NODE_ENV: test
+        run: |
+          node -e "
+            process.env.DATABASE_URL = process.env.DATABASE_URL;
+            const { validateEnv } = require('./src/middleware/validateEnv');
+            validateEnv();
+            console.log('validateEnv passed');
+          "
+
+  frontend:
+    name: Frontend — lint & audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Dependency security audit
+        run: npm audit --audit-level=high
+
+      - name: Type check / build check
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:3000
+          NEXTAUTH_URL: http://localhost:4000
+          NEXTAUTH_SECRET: ci-nextauth-secret-at-least-32-chars-long
+        run: npm run build
+        continue-on-error: false

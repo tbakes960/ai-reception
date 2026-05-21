@@ -9,13 +9,14 @@ function isWithinWorkingHours(time) {
   return hour >= WORKING_START && hour < WORKING_END;
 }
 
-async function checkAvailability({ date, serviceType, time }) {
+async function checkAvailability({ date, serviceType, time, tenantId }) {
   if (time && !isWithinWorkingHours(time)) {
     return { available: false, reason: `Outside working hours (${process.env.WORKING_HOURS_START}–${process.env.WORKING_HOURS_END})` };
   }
 
   let sql = `SELECT time, service, duration_minutes FROM bookings WHERE date = $1 AND status != 'cancelled'`;
   const params = [date];
+  if (tenantId)    { sql += ` AND tenant_id = $${params.push(tenantId)}`; }
   if (serviceType) { sql += ` AND service = $${params.push(serviceType)}`; }
   if (time)        { sql += ` AND time = $${params.push(time)}`; }
 
@@ -27,15 +28,15 @@ async function checkAvailability({ date, serviceType, time }) {
   return { available: true, existingBookings: rows };
 }
 
-async function createBooking({ clientId, date, time, service, durationMinutes, notes }) {
+async function createBooking({ clientId, date, time, service, durationMinutes, notes, tenantId }) {
   if (!isWithinWorkingHours(time)) throw new Error(`Booking time ${time} is outside working hours`);
-  const avail = await checkAvailability({ date, serviceType: service, time });
+  const avail = await checkAvailability({ date, serviceType: service, time, tenantId });
   if (!avail.available) throw new Error(avail.reason);
 
   const { rows } = await db.query(
-    `INSERT INTO bookings (client_id, date, time, service, duration_minutes, notes, status)
-     VALUES ($1, $2, $3, $4, $5, $6, 'confirmed') RETURNING *`,
-    [clientId, date, time, service, durationMinutes || DEFAULT_DURATION, notes || null]
+    `INSERT INTO bookings (client_id, date, time, service, duration_minutes, notes, status, tenant_id)
+     VALUES ($1, $2, $3, $4, $5, $6, 'confirmed', $7) RETURNING *`,
+    [clientId, date, time, service, durationMinutes || DEFAULT_DURATION, notes || null, tenantId || null]
   );
   return rows[0];
 }

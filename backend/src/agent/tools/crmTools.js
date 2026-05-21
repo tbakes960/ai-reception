@@ -1,15 +1,17 @@
 const db = require('../../services/db');
 
-async function getClient(phone) {
-  const { rows } = await db.query('SELECT * FROM clients WHERE phone = $1', [phone]);
+async function getClient(phone, tenantId) {
+  const params = [phone];
+  const tenantClause = tenantId ? ` AND tenant_id = $${params.push(tenantId)}` : '';
+  const { rows } = await db.query(`SELECT * FROM clients WHERE phone = $1${tenantClause}`, params);
   if (!rows[0]) throw new Error('Client not found');
   return rows[0];
 }
 
-async function createClient({ name, phone, email }) {
+async function createClient({ name, phone, email, tenantId }) {
   const { rows } = await db.query(
-    'INSERT INTO clients (name, phone, email) VALUES ($1, $2, $3) RETURNING *',
-    [name, phone || null, email || null]
+    'INSERT INTO clients (name, phone, email, tenant_id) VALUES ($1, $2, $3, $4) RETURNING *',
+    [name, phone || null, email || null, tenantId || null]
   );
   return rows[0];
 }

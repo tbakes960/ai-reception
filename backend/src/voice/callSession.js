@@ -10,6 +10,7 @@ class CallSession {
     this.ws = ws;
     this.logger = logger;
 
+    this.tenantId = null;
     this.conversationHistory = [];
     this.clientData = null;
 

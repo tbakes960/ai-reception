@@ -1,5 +1,6 @@
 const express = require('express');
 const twilio = require('twilio');
+const db = require('../services/db');
 const { CallSession } = require('./callSession');
 const { createDeepgramStream } = require('./deepgramSTT');
 const { createElevenLabsStream } = require('./elevenLabsTTS');
@@ -59,6 +60,18 @@ async function handleMediaStream(ws, logger) {
 
         session = new CallSession({ streamSid, callSid, callerPhone, ws, logger });
 
+        // Resolve the tenant for this Twilio number so all DB writes are scoped
+        try {
+          const { rows } = await db.query(
+            `SELECT id FROM tenants WHERE twilio_phone = $1 OR slug = 'oyugis' ORDER BY (twilio_phone = $1) DESC LIMIT 1`,
+            [process.env.TWILIO_PHONE_NUMBER]
+          );
+          session.tenantId = rows[0]?.id || null;
+          if (!session.tenantId) logger.warn('No tenant found for this Twilio number — tenant-scoped writes will fail');
+        } catch (err) {
+          logger.error({ err }, 'Failed to resolve tenant');
+        }
+
         // Start Deepgram STT
         const { connection: dgConn, emitter: sttEmitter } = createDeepgramStream(session);
         session.deepgramConn = dgConn;
@@ -77,11 +90,11 @@ async function handleMediaStream(ws, logger) {
           fillerStream.sendText(randomFiller());
           fillerStream.flush();
 
-          // Fetch client by phone
+          // Fetch client by phone (tenant-scoped)
           if (!session.clientData) {
-            session.clientData = await getClient(callerPhone).catch(() => null);
+            session.clientData = await getClient(callerPhone, session.tenantId).catch(() => null);
             if (!session.clientData && callerPhone !== 'unknown') {
-              session.clientData = await createClient({ name: 'Guest', phone: callerPhone }).catch(() => null);
+              session.clientData = await createClient({ name: 'Guest', phone: callerPhone, tenantId: session.tenantId }).catch(() => null);
             }
           }
 

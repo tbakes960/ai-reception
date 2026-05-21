@@ -149,12 +149,11 @@ CREATE INDEX IF NOT EXISTS campaign_calls_status_idx   ON campaign_calls(status)
 CREATE INDEX IF NOT EXISTS campaign_calls_campaign_idx ON campaign_calls(campaign_id);
 
 -- ============================================================
--- SEED: Default admin user
--- Password: admin123  (bcrypt hash — change immediately after first login)
+-- SEED: Run scripts/create-admin.js to create the first admin user.
+-- No default credentials are seeded — hardcoded passwords are a
+-- security violation. The setup script generates a random password
+-- and prints it once to stdout.
 -- ============================================================
-INSERT INTO users (email, password_hash, role)
-VALUES ('admin@hotel.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMqJqhcanFp8OFAs.oFnHXnubO', 'admin')
-ON CONFLICT (email) DO NOTHING;
 
 -- ============================================================
 -- SEED: Default campaigns

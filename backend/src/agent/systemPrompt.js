@@ -1,7 +1,7 @@
 const { getContext } = require('../services/ragService');
 
-async function buildSystemPrompt({ clientData, userQuery }) {
-  const ragContext = await getContext(userQuery).catch(() => '');
+async function buildSystemPrompt({ clientData, userQuery, tenantId }) {
+  const ragContext = await getContext(userQuery, tenantId).catch(() => '');
 
   const hotelName = process.env.HOTEL_NAME || 'our hotel';
   const now = new Date().toLocaleString('en-KE', {

@@ -1,5 +1,6 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const { buildSystemPrompt } = require('./systemPrompt');
+const { sanitizeTranscript } = require('./sanitize');
 
 const crmTools = require('./tools/crmTools');
 const bookingTools = require('./tools/bookingTools');
@@ -17,25 +18,27 @@ const ALL_TOOL_DEFS = [
   ...workflowTools.TOOL_DEFINITIONS,
 ];
 
-const TOOL_HANDLERS = {
-  getClient: (i) => crmTools.getClient(i.phone),
-  createClient: (i) => crmTools.createClient(i),
-  updateClientNotes: (i) => crmTools.updateClientNotes(i),
-  checkAvailability: (i) => bookingTools.checkAvailability(i),
-  createBooking: (i) => bookingTools.createBooking(i),
-  updateBooking: (i) => bookingTools.updateBooking(i),
-  deleteBooking: (i) => bookingTools.deleteBooking(i),
-  getBookings: (i) => bookingTools.getBookings(i),
-  syncToCalendar: (i) => calendarTools.syncToCalendar(i),
-  sendSMS: (i) => communicationTools.sendSMS(i),
-  sendWhatsApp: (i) => communicationTools.sendWhatsApp(i),
-  sendEmail: (i) => communicationTools.sendEmailMessage(i),
-  createTicket: (i) => workflowTools.createTicket(i),
-  applyCRMTag: (i) => workflowTools.applyCRMTag(i),
-  triggerFollowUpSequence: (i) => workflowTools.triggerFollowUpSequence(i),
-  addToEmailList: (i) => workflowTools.addToEmailList(i),
-  sendInvoice: (i) => workflowTools.sendInvoice(i),
-};
+function makeToolHandlers(tenantId) {
+  return {
+    getClient: (i) => crmTools.getClient(i.phone, tenantId),
+    createClient: (i) => crmTools.createClient({ ...i, tenantId }),
+    updateClientNotes: (i) => crmTools.updateClientNotes(i),
+    checkAvailability: (i) => bookingTools.checkAvailability({ ...i, tenantId }),
+    createBooking: (i) => bookingTools.createBooking({ ...i, tenantId }),
+    updateBooking: (i) => bookingTools.updateBooking(i),
+    deleteBooking: (i) => bookingTools.deleteBooking(i),
+    getBookings: (i) => bookingTools.getBookings(i),
+    syncToCalendar: (i) => calendarTools.syncToCalendar(i),
+    sendSMS: (i) => communicationTools.sendSMS(i),
+    sendWhatsApp: (i) => communicationTools.sendWhatsApp(i),
+    sendEmail: (i) => communicationTools.sendEmailMessage(i),
+    createTicket: (i) => workflowTools.createTicket(i),
+    applyCRMTag: (i) => workflowTools.applyCRMTag(i),
+    triggerFollowUpSequence: (i) => workflowTools.triggerFollowUpSequence(i),
+    addToEmailList: (i) => workflowTools.addToEmailList(i),
+    sendInvoice: (i) => workflowTools.sendInvoice(i),
+  };
+}
 
 /**
  * Run one conversational turn of the hotel AI agent.
@@ -48,15 +51,18 @@ const TOOL_HANDLERS = {
  * @param {Function} options.onDone       - called with full assistant text when turn ends
  */
 async function runAgentTurn({ session, onTextChunk, onDone }) {
-  const userQuery = session.conversationHistory.at(-1)?.content || '';
+  const rawQuery = session.conversationHistory.at(-1)?.content || '';
+  const userQuery = sanitizeTranscript(rawQuery);
   const systemPrompt = await buildSystemPrompt({
     clientData: session.clientData,
     userQuery,
+    tenantId: session.tenantId,
   });
 
+  // Sanitize all user turns before sending to the model
   const messages = session.conversationHistory.map((m) => ({
     role: m.role,
-    content: m.content,
+    content: m.role === 'user' ? sanitizeTranscript(m.content) : m.content,
   }));
 
   let assistantText = '';
@@ -119,9 +125,10 @@ async function runAgentTurn({ session, onTextChunk, onDone }) {
     // Execute tool calls
     messages.push({ role: 'assistant', content: finalMsg.content });
 
+    const toolHandlers = makeToolHandlers(session.tenantId);
     const toolResults = await Promise.all(
       toolUseBlocks.map(async (tool) => {
-        const handler = TOOL_HANDLERS[tool.name];
+        const handler = toolHandlers[tool.name];
         let result;
         try {
           result = handler ? await handler(tool.input) : { error: `Unknown tool: ${tool.name}` };
